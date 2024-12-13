@@ -1,0 +1,46 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.example.location_tracking"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        // Specify your unique Application ID
+        applicationId = "com.example.location_tracking"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+
+        // Manually set versionCode and versionName if flutter.* values are not resolving
+        versionCode flutter.hasProperty("versionCode") ? flutter.versionCode.toInteger() : 1
+        versionName flutter.hasProperty("versionName") ? flutter.versionName : "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            // You can specify your own signing config for release builds
+            signingConfig = signingConfigs.debug  // Adjust this to your release signing config
+            minifyEnabled false // Enable Proguard for release builds
+            shrinkResources false // Optional: shrink resources to reduce APK size
+            //proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'  // Include your proguard rules
+        }
+    }
+}
+
+flutter {
+    source = "../.."  // Ensure the correct path to the Flutter source directory
+}
