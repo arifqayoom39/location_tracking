@@ -274,7 +274,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:location_tracking/constants.dart';
 import 'package:location_tracking/database_helper.dart';
-import 'package:location_tracking/local_notification.dart';
 import 'package:location_tracking/routes.dart';
 import 'package:location_tracking/splash_screen.dart';
 
@@ -293,11 +292,11 @@ Future<void> main() async {
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
       isForegroundMode: true,
-      autoStart: true,
+      autoStart: false, // Do not auto-start
     ),
     iosConfiguration: IosConfiguration(
       onForeground: onStart,
-      autoStart: true,
+      autoStart: false, // Do not auto-start
     ),
   );
 
@@ -354,7 +353,7 @@ Future<void> addItem(double latitude, double longitude) async {
 }
 
 // Start updating location and show notifications
-startUpdateLocation() async {
+Future<void> startUpdateLocation() async {
   final LocationSettings locationSettings = LocationSettings(
     accuracy: LocationAccuracy.high,
     distanceFilter: 0,
@@ -381,13 +380,13 @@ startUpdateLocation() async {
         ),
       );
       // Save the new location to the database
-      addItem(newLoc.latitude, newLoc.longitude);
+      await addItem(newLoc.latitude, newLoc.longitude);
     }
   });
 }
 
 // Stop location updates when the service is stopped
-stopLocation() {
+void stopLocation() {
   subscription?.cancel();
 }
 
@@ -427,6 +426,6 @@ Future<bool> checkAndRequestLocationPermission() async {
   if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
     permission = await Geolocator.requestPermission();
   }
-  return permission == LocationPermission.whileInUse || permission == LocationPermission.always;
-}
+ return permission == LocationPermission.whileInUse || permission == LocationPermission.always;
+} 
 

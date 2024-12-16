@@ -1,7 +1,353 @@
-// import 'dart:html';
-// ignore_for_file: prefer_const_constructors, unnecessary_new, use_build_context_synchronously, prefer_typing_uninitialized_variables, unused_field, unnecessary_null_comparison, unrelated_type_equality_checks, avoid_print, unused_element, deprecated_member_use, unused_local_variable
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../constants.dart';
+import '../database_helper.dart';
 
+class EmployeeHomeScreen extends StatefulWidget {
+  static const String routeName = "/employee_home";
+
+  const EmployeeHomeScreen({super.key});
+
+  @override
+  _EmployeeHomeScreenState createState() => _EmployeeHomeScreenState();
+}
+
+class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
+  StreamSubscription<Position>? _positionSubscription;
+  Position? _currentLocation;
+  List<Map<String, dynamic>> _allData = [];
+  bool _isServiceRunning = false;
+  bool _isLoading = false;
+  bool _isError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkServiceStatus();
+  }
+
+  Future<void> _checkServiceStatus() async {
+    _isServiceRunning = await FlutterBackgroundService().isRunning();
+    setState(() {});  // Ensure the UI rebuilds when service status changes
+  }
+
+  Future<void> _startService() async {
+    setState(() {
+      _isLoading = true;  // Show loader when starting service
+    });
+
+    if (await _checkAndRequestLocationPermission()) {
+      await FlutterBackgroundService().startService();
+      setState(() {
+        _isServiceRunning = true;
+        _isLoading = false;  // Hide loader after starting service
+      });
+    } else {
+      _showPermissionDeniedDialog();
+      setState(() {
+        _isLoading = false;  // Hide loader if permission is denied
+      });
+    }
+  }
+
+  Future<void> _stopService() async {
+    FlutterBackgroundService().invoke('stopService');
+    setState(() {
+      _isServiceRunning = false;
+    });
+  }
+
+  Future<bool> _checkAndRequestLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      permission = await Geolocator.requestPermission();
+    }
+    return permission == LocationPermission.whileInUse || permission == LocationPermission.always;
+  }
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Permission Denied"),
+        content: const Text("Location permission is required to track your location."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      _isLoading = true;  // Show loader while loading data
+      _isError = false;  // Reset error state
+    });
+
+    try {
+      final data = await DatabaseHelper.getAllItems();
+      setState(() {
+        _allData = data;
+        _isLoading = false;  // Hide loader after loading data
+      });
+      _showCoordinatesDialog();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;  // Hide loader on error
+        _isError = true;  // Set error state
+      });
+      _showErrorDialog();  // Show error dialog
+    }
+  }
+
+  void _showCoordinatesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Coordinates"),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: _allData.map((item) {
+                return Text("ID: ${item['id']}, Lat: ${item['latitude']}, Long: ${item['longitude']}");
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Error"),
+        content: const Text("Failed to load coordinates. Please try again."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _refreshData();  // Retry loading data
+            },
+            child: const Text("Retry"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Cancel"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Location Tracking'),
+      ),
+      body: Center(
+        child: _isLoading
+            ? const CircularProgressIndicator()  // Ensure loader is shown during loading
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(_isServiceRunning ? "Service is Running" : "Service is Stopped"),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _isServiceRunning ? null : _startService,
+                    child: const Text("Start Service"),
+                  ),
+                  ElevatedButton(
+                    onPressed: _isServiceRunning ? _stopService : null,
+                    child: const Text("Stop Service"),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _refreshData,
+                    child: const Text("Show Coordinates"),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_currentLocation != null)
+                    Text("Current Location: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}"),
+                  if (_isError)  // Show error message if there was an error
+                    const Text(
+                      "Error loading coordinates. Please try again.",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+
+//My code But without Loader... after this Default Code is also present
+// at the end
+
+/*import 'dart:async';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../constants.dart';
+import '../database_helper.dart';
+
+class EmployeeHomeScreen extends StatefulWidget {
+  static String routeName = "/employee_home";
+
+  const EmployeeHomeScreen({super.key});
+  
+  @override
+  State<EmployeeHomeScreen> createState() => _EmployeeHomeScreenState();
+}
+
+class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
+  StreamSubscription<Position>? subscription;
+  Position? currentLocation;
+  List<Map<String, dynamic>> allMyData = [];
+  bool isServiceRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    checkServiceStatus();
+  }
+
+  Future<void> checkServiceStatus() async {
+    isServiceRunning = await FlutterBackgroundService().isRunning();
+    setState(() {});
+  }
+
+  Future<void> startService() async {
+    if (await _checkAndRequestLocationPermission()) {
+      await FlutterBackgroundService().startService();
+      setState(() {
+        isServiceRunning = true;
+      });
+    } else {
+      _showPermissionDeniedDialog();
+    }
+  }
+
+  Future<void> stopService() async {
+    FlutterBackgroundService().invoke('stopService');
+    setState(() {
+      isServiceRunning = false;
+    });
+  }
+
+  Future<bool> _checkAndRequestLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      permission = await Geolocator.requestPermission();
+    }
+    return permission == LocationPermission.whileInUse || permission == LocationPermission.always;
+  }
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Permission Denied"),
+        content: Text("Location permission is required to track your location."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Location Tracking'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(isServiceRunning ? "Service is Running" : "Service is Stopped"),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: isServiceRunning ? null : startService,
+              child: Text("Start Service"),
+            ),
+            ElevatedButton(
+              onPressed: isServiceRunning ? stopService : null,
+              child: Text("Stop Service"),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _refreshData,
+              child: Text("Show Coordinates"),
+            ),
+            SizedBox(height: 20),
+            if (currentLocation != null)
+              Text("Current Location: ${currentLocation!.latitude}, ${currentLocation!.longitude}"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refreshData() async {
+    final data = await DatabaseHelper.getAllItems();
+    setState(() {
+      allMyData = data;
+    });
+    // Optionally, show the coordinates in a dialog or a new screen
+    _showCoordinatesDialog();
+  }
+
+  void _showCoordinatesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Coordinates"),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: allMyData.map((item) {
+                return Text("ID: ${item['id']}, Lat: ${item['latitude']}, Long: ${item['longitude']}");
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}*/
+
+
+
+/*import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -1349,4 +1695,4 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen>
       },
     );
   }
-}
+}*/
